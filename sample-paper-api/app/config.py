@@ -1,17 +1,40 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-import os
+import os, redis
 from dotenv import load_dotenv
-# import google.generativeai as genai
+import redis.asyncio as aioredis
 
-# Load environment variables
 load_dotenv()
-
-# genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 
 CONNECTION_STRING = os.getenv('MONGO_URI')
 
+host = os.getenv("HOST")
+port = os.getenv("PORT")
+
 client = AsyncIOMotorClient(CONNECTION_STRING)
 db = client["sample_paper_db"]
+
+
+
+# Create Redis connection pool
+redis_client = aioredis.from_url(
+    "redis://localhost:6379",  
+    decode_responses=True,  # Automatically decode byte responses to strings
+    max_connections=10  # Control the size of the pool for performance
+)
+
+async def get_redis_client():
+    return redis_client
+
+
+# try:
+#   r = redis.Redis(
+#       host=host,
+#       port=port,
+#   )
+#   r.ping()  # Check if Redis is connected
+#   print("Connected to Redis successfully!")
+# except redis.ConnectionError as e:
+#   print(f"Redis connection failed: {e}")
 
 instruction = """As an expert in document entity extraction, your task is to analyze a provided question paper and extract key entities into a structured format following the specified schema below. The extracted entities should be accurate, well-organized, and aligned with the document's content. Ensure that every part of the question paper is parsed appropriately, with all relevant fields captured.
 Schema for Extraction:

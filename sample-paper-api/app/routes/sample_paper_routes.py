@@ -1,14 +1,17 @@
+import json
+import redis.asyncio as aioredis
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from ..models import PaperModel
-from ..config import db
-from fastapi import APIRouter, HTTPException
+from ..config import db, get_redis_client
+from fastapi import APIRouter, HTTPException, Depends
 from bson import ObjectId
 from pymongo.errors import PyMongoError
 
 router = APIRouter()
 collection = db['sample_papers']
+
 
 @router.post('/papers')
 async def create_sample_paper(paper: PaperModel):
@@ -25,11 +28,19 @@ async def create_sample_paper(paper: PaperModel):
         raise HTTPException(status_code=500, detail=f"Internal Server error: {e}")
     
 @router.get('/papers/{paper_id}')
-async def get_sample_paper(paper_id:str):
+async def get_sample_paper(paper_id:str, redis: aioredis.Redis = Depends(get_redis_client)):
     try:
+        cached_paper = await redis.get(paper_id)
+        if cached_paper:
+            cached_paper_data = json.loads(cached_paper)
+            sample_paper = PaperModel(**cached_paper_data)
+            return sample_paper
+        
         result = await collection.find_one({'_id': ObjectId(paper_id)})
         if result:
+            result['_id'] = str(result['_id'])
             sample_paper = PaperModel(**result)
+            await redis.set(paper_id, json.dumps(result), ex=3600)
             return sample_paper
         else:
             raise HTTPException(status_code=404, detail="Sample Paper not found")
