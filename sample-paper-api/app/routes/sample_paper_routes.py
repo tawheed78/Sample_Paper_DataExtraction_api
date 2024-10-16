@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from ..models import PaperModel
 from ..config import db
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException
 from bson import ObjectId
 from pymongo.errors import PyMongoError
 
