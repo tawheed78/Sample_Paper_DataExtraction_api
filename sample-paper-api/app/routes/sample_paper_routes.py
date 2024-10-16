@@ -40,7 +40,7 @@ async def get_sample_paper(paper_id:str, redis: aioredis.Redis = Depends(get_red
         if result:
             result['_id'] = str(result['_id'])
             sample_paper = PaperModel(**result)
-            await redis.set(paper_id, json.dumps(result), ex=3600)
+            await redis.set(paper_id, json.dumps(sample_paper), ex=3600)
             return sample_paper
         else:
             raise HTTPException(status_code=404, detail="Sample Paper not found")
@@ -50,23 +50,31 @@ async def get_sample_paper(paper_id:str, redis: aioredis.Redis = Depends(get_red
         raise HTTPException(status_code=500, detail=f"Internal Server error: {e}")
     
 @router.put('/papers/{paper_id}')
-async def update_sample_paper(paper_id: str, update_paper_data: PaperModel):
+async def update_sample_paper(paper_id: str, update_paper_data: PaperModel, redis: aioredis.Redis = Depends(get_redis_client)):
     try:
         result = await collection.update_one({"_id":ObjectId(paper_id)},{"$set": jsonable_encoder(update_paper_data)})
         if result.modified_count == 0:
             return JSONResponse(status_code=200, content={'message': "No changes made"})
         if result.modified_count == 1:
-            return JSONResponse(status_code=200, content={'message': "Product updated successfully"})
+            cached_paper = await redis.get(paper_id)
+            if cached_paper:
+                await redis.delete(paper_id)
+            return JSONResponse(status_code=200, content={'message': "Sample paper updated successfully"})
         else:
-            raise HTTPException(status_code=404, detail="Product not found or not updated")
+            raise HTTPException(status_code=404, detail="Sample Paper not found or not updated")
+    except PyMongoError as pme:
+        raise HTTPException(status_code=503, detail=f"Database error: {pme}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Error updating Product")
+        raise HTTPException(status_code=500, detail=f"Error updating Sample Paper: {e}")
 
 @router.delete('/papers/{paper_id}')
-async def delete_sample_paper(paper_id: str):
+async def delete_sample_paper(paper_id: str, redis: aioredis.Redis = Depends(get_redis_client)):
     try:
         result = await collection.delete_one({'_id': ObjectId(paper_id)})
         if result.deleted_count == 1:
+            cached_paper = await redis.get(paper_id)
+            if cached_paper:
+                await redis.delete(paper_id)
             return JSONResponse(status_code=200, content={'message': f"Sample Paper with Paper ID: {paper_id} deleted successfully"})
         else:
             raise HTTPException(status_code=404, detail=f"Sample Paper with Paper ID: {paper_id} not found")
