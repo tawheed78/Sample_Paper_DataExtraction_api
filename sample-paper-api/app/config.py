@@ -36,7 +36,7 @@ async def get_redis_client():
 # except redis.ConnectionError as e:
 #   print(f"Redis connection failed: {e}")
 
-instruction = """As an expert in document entity extraction, your task is to analyze a provided question paper and extract key entities into a structured format following the specified schema below. The extracted entities should be accurate, well-organized, and aligned with the document's content. Ensure that every part of the question paper is parsed appropriately, with all relevant fields captured.
+instruction = """As an expert in document entity extraction, your task is to analyze a provided question paper in either PDF format or plain text format and extract key entities into a structured format following the specified schema below. The extracted entities should be accurate, well-organized, and aligned with the document's content. Ensure that every part of the question paper is parsed appropriately, with all relevant fields captured. Try to analyze the number of sections and number of questions in each section and then collect the data.
 Schema for Extraction:
 
 {
@@ -74,30 +74,33 @@ Schema for Extraction:
   ]
 }
 Guidelines for Entity Extraction:
-There might be some strings which might be unterminated. Terminate them and use.
+
 Title: Extract the title of the question paper.
-Type: Identify the type of the paper (e.g., "previous_year", "sample_paper").
+Type: Identify the type of the paper (e.g., "previous_year", "sample_paper", "current_year").
 Time: Extract the allotted time for completing the paper (in minutes).
 Marks: Extract the total marks for the paper.
-Params: Capture details such as the education board, grade level, and subject.
+Params: Capture details such as the education board, grade level, and subject if present, else mark it None.
+Identify different sections which are mostly given in the beginning.
 Tags: Identify the key topics or areas (tags) covered by the paper (e.g., "algebra", "geometry").
 Chapters: Extract the chapters that are part of the question paper (e.g., "Quadratic Equations").
 Sections: Identify the sections, and for each section:
-Identify different sections which are mostly given in the beginning.
-THere might be specific marks for questions in each section.
-Extract the number of marks per question.
-Extract the type of section (e.g., "default", "optional").
-For each question in the section:
-Refer to the marks for the question in this section.
-Extract the full question text.
-Extract the correct answer to the question.
-Identify the type of question (e.g., "short", "long").
-Generate a question slug (a URL-friendly version of the question text).
-Extract the reference ID for the question (if provided).
-Provide a helpful hint for solving the question.
-Extract any additional parameters relevant to the question.
+  Identify the number of questions.
+  THere might be specific marks for questions in each section.
+  Extract the number of marks per question.
+  Extract the type of section (e.g., "default", "optional").
+  For each question in the section:
+    There might be 2 different questions in a single question separated by 'OR'. Consider both of them in a single question object creating nested questions.
+    Refer to the marks for the question in this section.
+    Extract the full question text.
+    Extract the correct answer to the question.
+    Identify the type of question (e.g., "short", "long").
+    Generate a question slug (a URL-friendly version of the question text).
+    Extract the reference ID for the question (if provided).
+    Provide a helpful hint for solving the question.
+    Extract any additional parameters relevant to the question.
 Make sure to clean the response before returning, replace any HTML tags with specific characters to avoid json parsing issue.
-Ensure that the output adheres strictly to the schema format."""
+Ensure that the output adheres strictly to the schema format.
+Incase of json formatting errors in the response text, fix it and then return the response."""
 
 # prompt = (
 #     "Please extract the relevant information from the attached PDF question paper. Remember to extract all the questions with marks specific to each section and return the data strictly in JSON format while replacing the \n and \\n parts."
