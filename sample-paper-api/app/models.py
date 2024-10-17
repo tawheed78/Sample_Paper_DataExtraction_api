@@ -35,6 +35,15 @@ class TaskStatusModel(BaseModel):
     status: str
     description: Optional[str]
 
+class SearchPaperResponseModel(BaseModel):
+    paper_id: str
+    title: str
+    subject: str
+
+class SearchResponseModel(BaseModel):
+    message: str
+    results: List[SearchPaperResponseModel]
+
 # class Config:
 #     schema_extra = {
 #         "example": {

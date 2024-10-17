@@ -27,28 +27,34 @@ router = APIRouter()
 
 async def generate_sample_paper(sample_pdf, task_id: str):
     try:
-        response = model.generate_content([prompt, sample_pdf])  
-        response = response.text
-        return json.loads(response)
+        response = model.generate_content([prompt, sample_pdf,])  
+        response = jsonable_encoder(response.text)
+        response =json.loads(response)
+        return response
+    
     except json.JSONDecodeError as e:
-        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": str(e)}})
+        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed"}})
         raise HTTPException(status_code=500, detail="Invalid response from content generation")
+    
     except Exception as e:
-        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": str(e)}})
-        raise HTTPException(status_code=500, detail=f"Error during content generation: {e}")
+        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed"}})
+        raise HTTPException(status_code=500, detail="Error during content generation")
 
 async def insert_sample_paper(response: dict, task_id: str):
     try:
         sample_paper = PaperModel(**response) 
         await paper_collection.insert_one(sample_paper.model_dump())
+    
     except ValidationError as ve:
-        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": str(ve)}})
+        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed"}})
         raise HTTPException(status_code=422, detail=f"Validation error: {ve}")
+    
     except PyMongoError as pme:
-        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": str(pme)}})
+        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed"}})
         raise HTTPException(status_code=503, detail=f"Database error: {pme}")
+    
     except Exception as e:
-        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": str(e)}})
+        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed"}})
         raise HTTPException(status_code=500, detail=f"Database operation failed: {e}")
 
 
@@ -77,7 +83,7 @@ async def extract_pdf(file: UploadFile = File(...)):
         try:
             sample_pdf = genai.upload_file(file_location)
         except Exception as e:
-            await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": str(e)}})
+            await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed"}})
             raise HTTPException(status_code=500, detail="Error Uploading PDF")
         
         response = await generate_sample_paper(sample_pdf, task_id)
@@ -97,7 +103,7 @@ async def extract_pdf(file: UploadFile = File(...)):
         return {"message": "Sample paper extracted and saved successfully"}
     except Exception as e:
         print(e)
-        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": e}})
+        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed"}})
         raise HTTPException(status_code=500, detail="Operation failed due to internal error.")
 
 

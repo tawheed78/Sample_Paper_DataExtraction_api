@@ -3,14 +3,19 @@ import redis.asyncio as aioredis
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
-from ..models import PaperModel
+from ..models import PaperModel, SearchResponseModel, SearchPaperResponseModel
 from ..config import db, get_redis_client
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from bson import ObjectId
 from pymongo.errors import PyMongoError
+from pymongo import TEXT
 
 router = APIRouter()
 collection = db['sample_papers']
+
+#collection.create_index([("sections.questions.question", TEXT)])
+
+
 
 
 @router.post('/papers')
@@ -80,5 +85,40 @@ async def delete_sample_paper(paper_id: str, redis: aioredis.Redis = Depends(get
             raise HTTPException(status_code=404, detail=f"Sample Paper with Paper ID: {paper_id} not found")
     except PyMongoError as pme:
         raise HTTPException(status_code=503, detail=f"Database error: {pme}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal Server error: {e}")
+
+async def search(query_params: dict):
+    try:
+        result_cursor = collection.find(query_params)
+        results = await result_cursor.to_list(length=10)
+        return results
+    except PyMongoError as e:
+        raise HTTPException(status_code=503, detail="Database error while searching for papers")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal server error during search")
+
+
+@router.get('/papers/search/')
+async def search_papers(query: str = Query(..., description="Query string to search papers")):
+    try:
+        query_params = {"$text": {"$search": query }}
+        result = await search(query_params)
+        if not result:
+            raise HTTPException(status_code=404, detail="No sample papers found for the given query")
+        sample_papers = []
+        for res in result:
+            try:
+                paper_id = str(res["_id"])
+                paper_title = res.get("title", "Untitled")
+                paper_subject = res.get("params", {}).get("subject", "Unknown Subject")
+                sample_papers.append(SearchPaperResponseModel(paper_id=paper_id, title=paper_title, subject=paper_subject))
+            except KeyError as e:
+                # logger.error(f"Missing field in document {res['_id']}: {e}")
+                continue
+        return SearchResponseModel(
+            message=f"{len(sample_papers)} papers found for query: '{query}'",
+            results=sample_papers
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server error: {e}")

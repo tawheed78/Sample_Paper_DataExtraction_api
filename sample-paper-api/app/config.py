@@ -36,7 +36,11 @@ async def get_redis_client():
 # except redis.ConnectionError as e:
 #   print(f"Redis connection failed: {e}")
 
-instruction = """As an expert in document entity extraction, your task is to analyze a provided question paper in either PDF format or plain text format and extract key entities into a structured format following the specified schema below. The extracted entities should be accurate, well-organized, and aligned with the document's content. Ensure that every part of the question paper is parsed appropriately, with all relevant fields captured. Try to analyze the number of sections and number of questions in each section and then collect the data.
+instruction = """As an expert in document entity extraction, your task is to analyze a provided question paper in either PDF format or 
+plain text format and extract key entities into a structured format referring the specified schema below. The extracted entities should be 
+accurate, well-organized, and aligned with the document's content. Ensure that every part of the question paper is parsed appropriately, with 
+all relevant fields captured. Try to analyze the number of sections and number of questions in each section and then collect the data. Make sure
+the "response" being returned is in a strict JSON format only with double quotes for required key value pairs.
 Schema for Extraction:
 
 {
@@ -91,7 +95,7 @@ Sections: Identify the sections, and for each section:
   For each question in the section:
     There might be 2 different questions in a single question separated by 'OR'. Consider both of them in a single question object creating nested questions.
     Refer to the marks for the question in this section.
-    Extract the full question text.
+    Extract the full question text only. Ignore any picture or figure.
     Extract the correct answer to the question.
     Identify the type of question (e.g., "short", "long").
     Generate a question slug (a URL-friendly version of the question text).
@@ -112,10 +116,10 @@ prompt = (
     "2. Ensure that all keys and string values are enclosed in double quotes, and that commas are properly placed between key-value pairs. "
     "3. Avoid unterminated strings, ensure proper closing brackets, and add commas where necessary to separate array elements and key-value pairs. "
     "4. Ensure there are no syntax errors like missing commas, missing quotes, or other formatting issues. "
-    "5. If the content is too large, break it into smaller valid JSON chunks. "
-    "6. The final output must be error-free and valid JSON that can be parsed without issues."
+    "5. The final output must be error-free and valid JSON that can be parsed without issues."
 )
 
+#5. If the content is too large, break it into smaller valid JSON chunks. 
 
 
 
