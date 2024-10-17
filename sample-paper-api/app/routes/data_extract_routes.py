@@ -1,17 +1,19 @@
 import json, os, aiofiles
-from fastapi.responses import JSONResponse
+from bson import ObjectId
+from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
 from ..models import PaperModel
 from ..config import db, instruction, prompt
-from ..utils import text_cleanup
 from fastapi import APIRouter, Body, HTTPException,File, UploadFile
 import google.generativeai as genai
 from dotenv import load_dotenv
 from pymongo.errors import PyMongoError
+from typing import Optional
 
 load_dotenv()
 
-collection = db['sample_papers']
+paper_collection = db['sample_papers']
+task_collection = db['task_status']
 
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 model = genai.GenerativeModel(
@@ -21,6 +23,83 @@ model = genai.GenerativeModel(
 )
 
 router = APIRouter()
+
+
+async def generate_sample_paper(sample_pdf, task_id: str):
+    try:
+        response = model.generate_content([prompt, sample_pdf])  
+        response = response.text
+        return json.loads(response)
+    except json.JSONDecodeError as e:
+        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": str(e)}})
+        raise HTTPException(status_code=500, detail="Invalid response from content generation")
+    except Exception as e:
+        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": str(e)}})
+        raise HTTPException(status_code=500, detail=f"Error during content generation: {e}")
+
+async def insert_sample_paper(response: dict, task_id: str):
+    try:
+        sample_paper = PaperModel(**response) 
+        await paper_collection.insert_one(sample_paper.model_dump())
+    except ValidationError as ve:
+        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": str(ve)}})
+        raise HTTPException(status_code=422, detail=f"Validation error: {ve}")
+    except PyMongoError as pme:
+        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": str(pme)}})
+        raise HTTPException(status_code=503, detail=f"Database error: {pme}")
+    except Exception as e:
+        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": str(e)}})
+        raise HTTPException(status_code=500, detail=f"Database operation failed: {e}")
+
+
+@router.post('/extract/pdf')
+async def extract_pdf(file: UploadFile = File(...)):
+    try:
+        if file.content_type != "application/pdf":
+            raise HTTPException(status_code=400, detail="Only PDF files are allowed.")
+        
+        file_location = f"data/input/{file.filename}"
+        os.makedirs(os.path.dirname(file_location), exist_ok=True)
+
+        try:
+            async with aiofiles.open(file_location, 'wb') as out_file:
+                content = await file.read()
+                await out_file.write(content)
+        except OSError as e:
+            raise HTTPException(status_code=500, detail="Error while reading/writing file to disk")
+        
+        try:
+            task = await task_collection.insert_one({"status": "In Progress"})
+            task_id = task.inserted_id
+        except Exception as e:
+            raise HTTPException(status_code=500, detail="Error initializing task")
+        
+        try:
+            sample_pdf = genai.upload_file(file_location)
+        except Exception as e:
+            await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": str(e)}})
+            raise HTTPException(status_code=500, detail="Error Uploading PDF")
+        
+        response = await generate_sample_paper(sample_pdf, task_id)
+        # try:
+        #     response = await generate_sample_paper(sample_pdf)
+        # except Exception as e:
+        #     await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": e}})
+        #     raise HTTPException(status_code=500, detail="Error generating response")
+        await insert_sample_paper(response, task_id)
+        # try:
+        #     await insert_sample_paper(response)
+        # except Exception as e:
+        #     task = await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": e}})
+        #     raise HTTPException(status_code=500, detail="An internal server error occured")
+        
+        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Completed"}})
+        return {"message": "Sample paper extracted and saved successfully"}
+    except Exception as e:
+        print(e)
+        await task_collection.update_one({"_id":ObjectId(task_id)},{"$set": {"status": "Failed", "description": e}})
+        raise HTTPException(status_code=500, detail="Operation failed due to internal error.")
+
 
 @router.post('/extract/text')
 async def extract_text(input_data: str = Body(...)):
@@ -33,62 +112,14 @@ async def extract_text(input_data: str = Body(...)):
             sample_paper = PaperModel(**json.loads(response))
         except ValidationError as ve:
             raise HTTPException(status_code=422, detail=f"Validation error: {ve}")
-        result = collection.insert_one(sample_paper.model_dump())
+        result = paper_collection.insert_one(sample_paper.model_dump())
         return {"message": "Sample paper extracted and saved successfully"}
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON response from model.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
-        
+    
 
-async def generate_sample_paper(sample_pdf):
-    try:
-        response = model.generate_content([prompt, sample_pdf])  # Assuming model is synchronous1
-        response = response.text
-        return json.loads(response)
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail="Invalid response from content generation")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error during content generation: {e}")
-
-async def insert_sample_paper(response: dict):
-    try:
-        sample_paper = PaperModel(**response)  # Validate using Pydantic
-        await collection.insert_one(sample_paper.model_dump())  # Async MongoDB insertion
-    except ValidationError as ve:
-        raise HTTPException(status_code=422, detail=f"Validation error: {ve}")
-    except PyMongoError as pme:
-        raise HTTPException(status_code=503, detail=f"Database error: {pme}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database operation failed: {e}")
-
-
-@router.post('/extract/pdf')
-async def extract_pdf(file: UploadFile = File(...)):
-    try:
-        if file.content_type != "application/pdf":
-            raise HTTPException(status_code=400, detail="Only PDF files are allowed.")
-        
-        file_location = f"data/input/{file.filename}"
-        os.makedirs(os.path.dirname(file_location), exist_ok=True)
-        try:
-            async with aiofiles.open(file_location, 'wb') as out_file:
-                content = await file.read()
-                await out_file.write(content)
-        except OSError as e:
-            raise HTTPException(status_code=500, detail=f"Error while reading/writing file to disk: {e}")
-        try:
-            sample_pdf = genai.upload_file(file_location)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error Uploading PDF: {e}")
-        try:
-            response = await generate_sample_paper(sample_pdf)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error generating response: {e}")
-        try:
-            await insert_sample_paper(response)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error: {e}")
-        return {"message": "Sample paper extracted and saved successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Operation failed: {e}")
+@router.get('/tasks/{task_id}')
+async def task_status(task_id: str):
+    pass

@@ -30,6 +30,11 @@ class PaperModel(BaseModel):
     chapters: List[str]
     sections: List[SectionModel]
 
+class TaskStatusModel(BaseModel):
+    task_id: str
+    status: str
+    description: Optional[str]
+
 # class Config:
 #     schema_extra = {
 #         "example": {
