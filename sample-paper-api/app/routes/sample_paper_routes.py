@@ -18,7 +18,7 @@ collection = db['sample_papers']
 
 @router.post('/papers')
 @rate_limit(limit=5, time_window=60) 
-async def create_sample_paper(paper: PaperModel):
+async def create_sample_paper(request: Request, paper: PaperModel):
     try:
         paper_data = paper.model_dump()
         result = await collection.insert_one(paper_data)
@@ -33,7 +33,7 @@ async def create_sample_paper(paper: PaperModel):
     
 @router.get('/papers/{paper_id}')
 @rate_limit(limit=10, time_window=60) 
-async def get_sample_paper(paper_id:str, redis: aioredis.Redis = Depends(get_redis_client)):
+async def get_sample_paper(request:Request, paper_id:str, redis: aioredis.Redis = Depends(get_redis_client)):
     try:
         cached_paper = await redis.get(paper_id)
         if cached_paper:
@@ -45,7 +45,7 @@ async def get_sample_paper(paper_id:str, redis: aioredis.Redis = Depends(get_red
         if result:
             result['_id'] = str(result['_id'])
             sample_paper = PaperModel(**result)
-            await redis.set(paper_id, json.dumps(sample_paper), ex=3600)
+            await redis.set(paper_id, json.dumps(sample_paper.model_dump()), ex=3600)
             return sample_paper
         else:
             raise HTTPException(status_code=404, detail="Sample Paper not found")
@@ -56,7 +56,7 @@ async def get_sample_paper(paper_id:str, redis: aioredis.Redis = Depends(get_red
     
 @router.put('/papers/{paper_id}')
 @rate_limit(limit=3, time_window=60) 
-async def update_sample_paper(paper_id: str, update_paper_data: PaperModel, redis: aioredis.Redis = Depends(get_redis_client)):
+async def update_sample_paper(request:Request, paper_id: str, update_paper_data: PaperModel, redis: aioredis.Redis = Depends(get_redis_client)):
     try:
         result = await collection.update_one({"_id":ObjectId(paper_id)},{"$set": jsonable_encoder(update_paper_data)})
         if result.modified_count == 0:
@@ -76,7 +76,7 @@ async def update_sample_paper(paper_id: str, update_paper_data: PaperModel, redi
 
 @router.delete('/papers/{paper_id}')
 @rate_limit(limit=5, time_window=60) 
-async def delete_sample_paper(paper_id: str, redis: aioredis.Redis = Depends(get_redis_client)):
+async def delete_sample_paper(request:Request, paper_id: str, redis: aioredis.Redis = Depends(get_redis_client)):
     try:
         result = await collection.delete_one({'_id': ObjectId(paper_id)})
         if result.deleted_count == 1:
@@ -103,7 +103,7 @@ async def search(query_params: dict):
 
 
 @router.get('/papers/search/')
-@rate_limit(limit=25, time_window=60) 
+@rate_limit(limit=20, time_window=60) 
 async def search_papers(request: Request, query: str = Query(..., description="Query string to search papers")):
     try:
         query_params = {"$text": {"$search": query }}

@@ -1,10 +1,11 @@
 import json, os, aiofiles
 from bson import ObjectId
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from ..models import PaperModel
 from ..config import db, instruction, prompt
-from fastapi import APIRouter, Body, HTTPException,File, UploadFile
+from fastapi import APIRouter, Body, HTTPException,File, Request, UploadFile
 import google.generativeai as genai
 from dotenv import load_dotenv
 from pymongo.errors import PyMongoError
@@ -60,7 +61,7 @@ async def insert_sample_paper(response: dict, task_id: str):
 
 @router.post('/extract/pdf')
 @rate_limit(limit=2, time_window=60) 
-async def extract_pdf(file: UploadFile = File(...)):
+async def extract_pdf(request:Request, file: UploadFile = File(...)):
     try:
         if file.content_type != "application/pdf":
             raise HTTPException(status_code=400, detail="Only PDF files are allowed.")
@@ -109,8 +110,8 @@ async def extract_pdf(file: UploadFile = File(...)):
 
 
 @router.post('/extract/text')
-@rate_limit(limit=5, time_window=60) 
-async def extract_text(input_data: str = Body(...)):
+@rate_limit(limit=3, time_window=60) 
+async def extract_text(request:Request, input_data: str = Body(...)):
     try:
         if not isinstance(input_data, str):
             raise HTTPException(status_code=400, detail="Only plain text are allowed.")
@@ -130,4 +131,15 @@ async def extract_text(input_data: str = Body(...)):
 
 @router.get('/tasks/{task_id}')
 async def task_status(task_id: str):
-    pass
+    try:
+        if not ObjectId.is_valid(task_id):
+            raise HTTPException(status_code=400, detail="Invalid Task ID format")
+        task = await task_collection.find_one({"_id": ObjectId(task_id)})
+        if not task:
+            raise HTTPException(status_code=400, detail="No such Task exists")
+        task_status = task.get("status", "Unknown. Please wait as we are looking into the issue...")
+        return JSONResponse(status_code=200, content={'task_status': task_status})
+    except PyMongoError as pme:
+        raise HTTPException(status_code=503, detail=f"Database error: {pme}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal Server error: {e}")
