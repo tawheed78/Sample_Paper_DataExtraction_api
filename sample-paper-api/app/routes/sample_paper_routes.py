@@ -5,20 +5,19 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from ..models import PaperModel, SearchResponseModel, SearchPaperResponseModel
 from ..config import db, get_redis_client
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from bson import ObjectId
 from pymongo.errors import PyMongoError
 from pymongo import TEXT
+from app.rate_limiter import rate_limit
 
 router = APIRouter()
 collection = db['sample_papers']
 
-#collection.create_index([("sections.questions.question", TEXT)])
-
-
-
+#collection.create_index([("sections.questions.question", "text"), ("sections.questions.answer", "text")])
 
 @router.post('/papers')
+@rate_limit(limit=5, time_window=60) 
 async def create_sample_paper(paper: PaperModel):
     try:
         paper_data = paper.model_dump()
@@ -33,6 +32,7 @@ async def create_sample_paper(paper: PaperModel):
         raise HTTPException(status_code=500, detail=f"Internal Server error: {e}")
     
 @router.get('/papers/{paper_id}')
+@rate_limit(limit=10, time_window=60) 
 async def get_sample_paper(paper_id:str, redis: aioredis.Redis = Depends(get_redis_client)):
     try:
         cached_paper = await redis.get(paper_id)
@@ -55,6 +55,7 @@ async def get_sample_paper(paper_id:str, redis: aioredis.Redis = Depends(get_red
         raise HTTPException(status_code=500, detail=f"Internal Server error: {e}")
     
 @router.put('/papers/{paper_id}')
+@rate_limit(limit=3, time_window=60) 
 async def update_sample_paper(paper_id: str, update_paper_data: PaperModel, redis: aioredis.Redis = Depends(get_redis_client)):
     try:
         result = await collection.update_one({"_id":ObjectId(paper_id)},{"$set": jsonable_encoder(update_paper_data)})
@@ -72,7 +73,9 @@ async def update_sample_paper(paper_id: str, update_paper_data: PaperModel, redi
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating Sample Paper: {e}")
 
+
 @router.delete('/papers/{paper_id}')
+@rate_limit(limit=5, time_window=60) 
 async def delete_sample_paper(paper_id: str, redis: aioredis.Redis = Depends(get_redis_client)):
     try:
         result = await collection.delete_one({'_id': ObjectId(paper_id)})
@@ -100,7 +103,8 @@ async def search(query_params: dict):
 
 
 @router.get('/papers/search/')
-async def search_papers(query: str = Query(..., description="Query string to search papers")):
+@rate_limit(limit=25, time_window=60) 
+async def search_papers(request: Request, query: str = Query(..., description="Query string to search papers")):
     try:
         query_params = {"$text": {"$search": query }}
         result = await search(query_params)

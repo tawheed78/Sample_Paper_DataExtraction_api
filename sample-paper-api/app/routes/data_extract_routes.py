@@ -8,7 +8,7 @@ from fastapi import APIRouter, Body, HTTPException,File, UploadFile
 import google.generativeai as genai
 from dotenv import load_dotenv
 from pymongo.errors import PyMongoError
-from typing import Optional
+from app.rate_limiter import rate_limit
 
 load_dotenv()
 
@@ -59,6 +59,7 @@ async def insert_sample_paper(response: dict, task_id: str):
 
 
 @router.post('/extract/pdf')
+@rate_limit(limit=2, time_window=60) 
 async def extract_pdf(file: UploadFile = File(...)):
     try:
         if file.content_type != "application/pdf":
@@ -108,6 +109,7 @@ async def extract_pdf(file: UploadFile = File(...)):
 
 
 @router.post('/extract/text')
+@rate_limit(limit=5, time_window=60) 
 async def extract_text(input_data: str = Body(...)):
     try:
         if not isinstance(input_data, str):
