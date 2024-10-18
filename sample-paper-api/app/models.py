@@ -44,6 +44,10 @@ class SearchResponseModel(BaseModel):
     message: str
     results: List[SearchPaperResponseModel]
 
+class TaskStatusResponseModel(BaseModel):
+    task_id: str
+    status: str
+
 # class Config:
 #     schema_extra = {
 #         "example": {

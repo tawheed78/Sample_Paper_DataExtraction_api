@@ -6,22 +6,17 @@ import redis.asyncio as aioredis
 load_dotenv()
 
 CONNECTION_STRING = os.getenv('MONGO_URI')
-
-host = os.getenv("HOST")
-port = os.getenv("PORT")
-
 client = AsyncIOMotorClient(CONNECTION_STRING)
 db = client["sample_paper_db"]
 
-
-
+host = os.getenv("HOST")
+port = os.getenv("PORT")
 # Create Redis connection pool
 redis_client = aioredis.from_url(
     "redis://localhost:6379",  
-    decode_responses=True,  # Automatically decode byte responses to strings
-    max_connections=10  # Control the size of the pool for performance
+    decode_responses=True,  
+    max_connections=10 
 )
-
 async def get_redis_client():
     return redis_client
 
@@ -41,42 +36,48 @@ plain text format and extract key entities into a structured format referring th
 accurate, well-organized, and aligned with the document's content. Ensure that every part of the question paper is parsed appropriately, with 
 all relevant fields captured. Try to analyze the number of sections and number of questions in each section and then collect the data. Make sure
 the "response" being returned is in a strict JSON format only with double quotes for required key value pairs.
-Schema for Extraction:
-
+An Example of the Schema that needs to be extracted:
 {
-  "title": "string",
-  "type": "string",
-  "time": 0,
-  "marks": 0,
+  "title": "Sample Paper Title",
+  "type": "previous_year",
+  "time": 180,
+  "marks": 100,
   "params": {
-    "board": "string",
-    "grade": 0,
-    "subject": "string"
-  },
-  "tags": [
-    "string"
-  ],
-  "chapters": [
-    "string"
-  ],
+    "board": "CBSE",
+    "grade": 10,
+    "subject": "Maths"
+    },
+  "tags": ["algebra", "geometry"],
+  "chapters": ["Quadratic Equations", "Triangles"],
   "sections": [
     {
-      "marks_per_question": 0,
-      "type": "string",
-      "questions": [
-        {
-          "question": "string",
-          "answer": "string",
-          "type": "string",
-          "question_slug": "string",
-          "reference_id": "string",
-          "hint": "string",
-          "params": {}
-        }
-      ]
-    }
-  ]
+        "marks_per_question": 5,
+        "type": "default",
+        "questions": [
+          {
+            "question": "Solve the quadratic equation: x^2 + 5x + 6 = 0",
+            "answer": "The solutions are x = -2 and x = -3",
+            "type": "short",
+            "question_slug": "solve-quadratic-equation",
+            "reference_id": "QE001",
+            "hint": "Use the quadratic formula or factorization method",
+            "params": {}
+          },
+          {
+            "question": "In a right-angled triangle, if one angle is 30°, what is the other acute angle?",
+            "answer": "60°",
+            "type": "short",
+            "question_slug": "right-angle-triangle-angles",
+            "reference_id": "GT001",
+            "hint": "Remember that the sum of angles in a triangle is 180°",
+            "params": {}
+          }
+        ]
+      }
+    ]
+  }
 }
+
 Guidelines for Entity Extraction:
 
 Title: Extract the title of the question paper.
@@ -121,6 +122,39 @@ prompt = (
 
 #5. If the content is too large, break it into smaller valid JSON chunks. 
 
-
+# {
+#   "title": "string",
+#   "type": "string",
+#   "time": 0,
+#   "marks": 0,
+#   "params": {
+#     "board": "string",
+#     "grade": 0,
+#     "subject": "string"
+#   },
+#   "tags": [
+#     "string"
+#   ],
+#   "chapters": [
+#     "string"
+#   ],
+#   "sections": [
+#     {
+#       "marks_per_question": 0,
+#       "type": "string",
+#       "questions": [
+#         {
+#           "question": "string",
+#           "answer": "string",
+#           "type": "string",
+#           "question_slug": "string",
+#           "reference_id": "string",
+#           "hint": "string",
+#           "params": {}
+#         }
+#       ]
+#     }
+#   ]
+# }
 
 
