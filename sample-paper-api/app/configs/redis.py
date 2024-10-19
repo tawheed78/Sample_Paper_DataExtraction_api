@@ -16,5 +16,4 @@ redis_client = aioredis.from_url(
 )
 async def get_redis_client():
     "Initialize redis client"
-    logger.debug("Redis Initialized")
     return redis_client

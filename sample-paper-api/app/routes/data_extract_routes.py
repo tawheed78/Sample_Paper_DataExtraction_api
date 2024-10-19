@@ -101,6 +101,7 @@ def insert_sample_paper(response: dict, task_id: str):
         sample_paper = PaperModel(**response)
         paper_collection.insert_one(sample_paper.model_dump())
         logger.info(f"Sample paper inserted successfully for task_id: {task_id}")
+        return True
     except ValidationError as ve:
         logger.error(f"Validation error for task_id: {task_id}: {ve}")
         update_task_status(task_id, status='Failed', description="Invalid response received")
@@ -134,9 +135,11 @@ def pdf_extraction_background_task(file_location: str, task_id:str):
             except json.JSONDecodeError as json_err:
                 logger.error(f"JSON decode error for task_id: {task_id}: {json_err}")
                 update_task_status(task_id, status='Failed', description="Invalid JSON Response")
-            insert_sample_paper(response, task_id)
-            update_task_status(task_id, status='Completed',
+            response = insert_sample_paper(response, task_id)
+            if response:
+                update_task_status(task_id, status='Completed',
                 description="Sample paper extracted and saved successfully")
+            update_task_status(task_id, status='Failed', description="Invalid JSON Response received from generator")
     except PyMongoError as pme:
         logger.error(f"Database error for task_id: {task_id}: {pme}")
         update_task_status(task_id, status='Failed', description="Database error occured")
@@ -192,8 +195,7 @@ async def extract_pdf(
         logger.error(f"Operation failed due to internal error for task_id: {task_id}: {e}")
         await update_task_status(task_id, status='Failed', description="Operation failed due to internal error.")
         raise HTTPException(status_code=500, detail="Operation failed due to internal error.") from e
-
-
+    
 @router.post('/extract/text')
 @rate_limit(limit=3, time_window=60)
 async def extract_text(request:Request, input_data: str = Body(...)):
