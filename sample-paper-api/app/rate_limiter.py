@@ -6,7 +6,8 @@ based on client IP address.
 import time
 from functools import wraps
 from fastapi import HTTPException, Request
-from app.config import redis_client as r
+#from app.config import redis_client as r
+from app.configs.redis import redis_client as r
 
 
 async def is_rate_limited(ip_address: str, limit: int, time_window: int) -> bool:

@@ -1,31 +1,3 @@
-"""This is the config module that contains the setup of
-database connection, redis connection and initialization
-of Prompt and Instruction."""
-
-import os
-from motor.motor_asyncio import AsyncIOMotorClient
-from dotenv import load_dotenv
-import redis.asyncio as aioredis
-
-load_dotenv()
-
-CONNECTION_STRING = os.getenv('MONGO_URI')
-client = AsyncIOMotorClient(CONNECTION_STRING)
-db = client["sample_paper_db"]
-
-host = os.getenv("HOST")
-port = os.getenv("PORT")
-
-# Create Redis connection pool
-redis_client = aioredis.from_url(
-  "redis://localhost:6379",
-  decode_responses=True,
-  max_connections=10
-)
-async def get_redis_client():
-    "Initialize redis client"
-    return redis_client
-
 safe= [
   {
       "category": "HARM_CATEGORY_HARASSMENT",
@@ -237,8 +209,7 @@ Ensure there are no missing commas and brackets, which are causing errors
 in validation like duplicate keys as the bracket are not closed. Specifically, the response should have properly closed objects and arrays.
 """
 
-PROMPT = (
-    """Please extract the relevant information from the attached PDF question paper, and return the 
+PROMPT ="""Please extract the relevant information from the attached PDF question paper, and return the 
     data strictly in valid JSON format.
     Ensure the following: "
     1. Replace all newline characters (e.g., '\\n') with appropriate spaces to maintain JSON 
@@ -283,4 +254,3 @@ class PaperModel(BaseModel):
       tags: List[str]
       chapters: List[str]
       sections: List[SectionModel]"""
-)
