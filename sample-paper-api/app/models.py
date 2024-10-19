@@ -40,11 +40,22 @@ class PaperModel(BaseModel):
     chapters: List[str]
     sections: List[SectionModel]
 
+class UpddatePaperModel(BaseModel):
+    "Model representing complete PaperModel with its attributes"
+    title: Optional[str] = {}
+    type: Optional[str] = {}
+    time: Optional[int] = {}
+    marks: Optional[int] = {}
+    params: Optional[ParamsModel] = {}
+    tags: Optional[List[str]] = {}
+    chapters: Optional[List[str]] = {}
+    sections: Optional[List[SectionModel]] ={}
+
 class TaskStatusModel(BaseModel):
     "Model representing attributes for Task Status."
     task_id: str
     status: str
-    description: Optional[str]
+    description: str
 
 class SearchPaperResponseModel(BaseModel):
     "Model representing attributes for Search Paper Model."
@@ -61,4 +72,4 @@ class TaskStatusResponseModel(BaseModel):
     "Model representing attributes of Task Status response."
     task_id: str
     status: str
-    
+    description: str

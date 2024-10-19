@@ -14,15 +14,22 @@ from pydantic import ValidationError
 import redis.asyncio as aioredis
 
 
-from app.models import PaperModel, SearchResponseModel, SearchPaperResponseModel
+from app.models import PaperModel,UpddatePaperModel, SearchResponseModel, SearchPaperResponseModel
 from app.config import db, get_redis_client
 from app.rate_limiter import rate_limit
 
 router = APIRouter()
 collection = db['sample_papers']
 
-#collection.create_index([("sections.questions.question", "text"),
-# ("sections.questions.answer", "text")])
+"Can Comment out this after running the server once."
+# try:
+#     index_name = collection.create_index(
+#       [("sections.questions.question", "text"), ("sections.questions.answer", "text")]
+#     )
+#     print(f"Index created")
+# except Exception as e:
+#     print(f"Error creating index: {e}")
+
 
 @router.post('/papers')
 @rate_limit(limit=5, time_window=60)
@@ -42,7 +49,7 @@ async def create_sample_paper(
         raise HTTPException(status_code=503, detail=f"Database error: {pme}") from pme
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server error: {e}") from e
-    
+
 @router.get('/papers/{paper_id}')
 @rate_limit(limit=10, time_window=60)
 async def get_sample_paper(
@@ -75,13 +82,14 @@ async def get_sample_paper(
 async def update_sample_paper(
     request:Request,
     paper_id: str,
-    update_paper_data: PaperModel,
+    update_paper_data: UpddatePaperModel,
     redis: aioredis.Redis = Depends(get_redis_client)
     ):
     "Update an existing sample paper."
     try:
         query = {"_id": ObjectId(paper_id)}
-        update_data = {"$set": jsonable_encoder(update_paper_data)}
+        #update_data = {"$set": jsonable_encoder(update_paper_data)}
+        update_data = {"$set": jsonable_encoder(update_paper_data.model_dump(exclude_unset=True))}
         result = await collection.update_one(query, update_data)
 
         if result.modified_count == 0:
@@ -122,7 +130,7 @@ async def delete_sample_paper(
                 status_code=200,
                 content={'message': f"Sample Paper with Paper ID: {paper_id} deleted successfully"}
                 )
-        raise HTTPException(status_code=404, detail=f"Sample Paper with Paper ID: {paper_id} not found")
+        raise HTTPException(status_code=404, detail=f"Paper with Paper ID: {paper_id} not found")
     except PyMongoError as pme:
         raise HTTPException(status_code=503, detail=f"Database error: {pme}") from pme
     except Exception as e:
@@ -135,9 +143,11 @@ async def search(query_params: dict):
         results = await result_cursor.to_list(length=10)
         return results
     except PyMongoError as e:
-        raise HTTPException(status_code=503, detail="Database error while searching for papers") from e
+        raise HTTPException(status_code=503,
+            detail="Database error while searching for paper") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal server error during search") from e
+        raise HTTPException(status_code=500,
+            detail="Internal server error during search") from e
 
 @router.get('/papers/search/')
 @rate_limit(limit=20, time_window=60)
@@ -162,7 +172,8 @@ async def search_papers(
                 sample_papers.append(SearchPaperResponseModel(paper_id=paper_id,
                     title=paper_title, subject=paper_subject))
             except Exception as e:
-                raise HTTPException(status_code=500, detail="Internal server error during search") from e
+                raise HTTPException(status_code=500,
+                    detail="Internal server error during search") from e
         return SearchResponseModel(
             message=f"{len(sample_papers)} papers found for query: '{query}'",
             results=sample_papers

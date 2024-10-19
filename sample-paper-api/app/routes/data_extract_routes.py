@@ -18,48 +18,26 @@ from fastapi import APIRouter, Body, HTTPException,File, Request, UploadFile, Ba
 
 from ..rate_limiter import rate_limit
 from ..models import PaperModel, TaskStatusResponseModel
-from ..config import db, INSTRUCTION, PROMPT, response_schema
-
+from ..config import db, INSTRUCTION, PROMPT, safe
 
 load_dotenv()
 
 paper_collection = db['sample_papers']
 task_collection = db['task_status']
 
-safe = [
-    {
-        "category": "HARM_CATEGORY_HARASSMENT",
-        "threshold": "BLOCK_NONE",
-    },
-    {
-        "category": "HARM_CATEGORY_HATE_SPEECH",
-        "threshold": "BLOCK_NONE",
-    },
-    {
-        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-        "threshold": "BLOCK_NONE",
-    },
-    {
-        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-        "threshold": "BLOCK_NONE",
-    },
-]
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 model = genai.GenerativeModel(
-    "models/gemini-1.5-flash",
+    model_name="models/gemini-1.5-flash",
     system_instruction=INSTRUCTION,
-    generation_config={"response_mime_type": "application/json"},
-    safety_settings=safe
-)
+    generation_config=({"response_mime_type": "application/json"}),
+    safety_settings = safe)
 
 router = APIRouter()
 
-def update_task_status(task_id, status, description=None):
+def update_task_status(task_id, status, description):
     "Update the status of a background task in the database."
     query = {"_id":ObjectId(task_id)}
-    update_data = {"$set": {"status": status}}
-    if description:
-        update_data["$set"]["description"] = description
+    update_data = {"$set": {"status": status, "description":description}}
     task_collection.update_one(query, update_data)
 
 def generate_sample_paper(sample_pdf, task_id: str):
@@ -71,27 +49,23 @@ def generate_sample_paper(sample_pdf, task_id: str):
             response = response_text
             return response
     except Exception as e:
-        update_task_status(task_id, status='Failed')
-        raise HTTPException(status_code=500, detail="Error during content generation") from e
+        update_task_status(task_id, status='Failed', description="Error during Content generation")
 
 def insert_sample_paper(response: dict, task_id: str):
     "Insert the generated sample paper into the MongoDB collection."
     try:
         sample_paper = PaperModel(**response)
         paper_collection.insert_one(sample_paper.model_dump())
-        return True
     except ValidationError as ve:
-        update_task_status(task_id, status='Failed')
-        raise HTTPException(status_code=422, detail=f"Validation error: {ve}") from ve
+        update_task_status(task_id, status='Failed', description="Invalid response received")
     except PyMongoError as pme:
-        update_task_status(task_id, status='Failed')
-        raise HTTPException(status_code=503, detail=f"Database error: {pme}") from ve
+        update_task_status(task_id, status='Failed', description="Database error")
     except Exception as e:
-        update_task_status(task_id, status='Failed')
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}") from e
+        update_task_status(task_id, status="Failed", description="Internal Server Error")
 
 def pdf_extraction_background_task(file_location: str, task_id:str):
-    "Background task to process PDF extraction and insert the generated sample paper into the database."
+    """Background task to process PDF extraction and insert the generated 
+    sample paper into the database."""
     try:
         sample_pdf = genai.upload_file(file_location)
         response = generate_sample_paper(sample_pdf, task_id)
@@ -99,22 +73,22 @@ def pdf_extraction_background_task(file_location: str, task_id:str):
             try:
                 response = json.loads(response)
             except json.JSONDecodeError as json_err:
-                update_task_status(task_id, status='Failed')
-                return {"error": "Invalid JSON response", "detail": str(json_err)}
-            result_status = insert_sample_paper(response, task_id)
-            if result_status:
-                update_task_status(task_id, status='Completed')
-                return {"message": "Sample paper extracted and saved successfully"}
+                update_task_status(task_id, status='Failed', description="Invalid JSON Response")
+            insert_sample_paper(response, task_id)
+            update_task_status(task_id, status='Completed',
+                description="Sample paper extracted and saved successfully")
     except PyMongoError as pme:
-        update_task_status(task_id, status='Failed')
-        raise HTTPException(status_code=503, detail=f"Database error: {pme}") from pme
+        update_task_status(task_id, status='Failed', description="Database error occured")
     except Exception as e:
-        update_task_status(task_id, status='Failed')
-        raise HTTPException(status_code=500, detail="Incorrect response generated. Please try again.") from e
+        update_task_status(task_id, status='Failed', description="Internal Server error")
 
 @router.post('/extract/pdf')
 @rate_limit(limit=2, time_window=60)
-async def extract_pdf(request:Request, background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+async def extract_pdf(
+    request:Request,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...)
+    ):
     "Handle PDF file upload and initiate background task for extraction."
     try:
         if file.content_type != "application/pdf":
@@ -125,15 +99,16 @@ async def extract_pdf(request:Request, background_tasks: BackgroundTasks, file: 
             content = await file.read()
             await out_file.write(content)
         try:
-            query = {"status": "In Progress"}
+            query = {"status": "In Progress", "description": "PDF extraction is in process..."}
             task = await task_collection.insert_one(query)
             task_id = task.inserted_id
         except Exception as e:
             raise HTTPException(status_code=500, detail="Error initializing task") from e
         background_tasks.add_task(pdf_extraction_background_task, file_location, task_id)
-        return JSONResponse(status_code=202, content={"message": f"The request for PDF extraction is accepted and is under progress. Please check the task status using Task ID: {task_id}"})
+        return JSONResponse(status_code=202,
+            content={"message": f"The request for PDF extraction is accepted and is under progress.Please check the task status using Task ID: {task_id}"})
     except Exception as e:
-        await update_task_status(task_id, status='Failed')
+        await update_task_status(task_id, status='Failed', description="Operation failed due to internal error.")
         raise HTTPException(status_code=500, detail="Operation failed due to internal error.") from e
 
 
@@ -168,7 +143,8 @@ async def task_status(task_id: str):
         if not task:
             raise HTTPException(status_code=400, detail="No such Task exists")
         task_status = task.get("status", "Unknown. Please wait as we are looking into the issue...")
-        return TaskStatusResponseModel(task_id=task_id, status=task_status)
+        task_description = task.get("description", "Unknown. Please wait as we are looking into the issue...")
+        return TaskStatusResponseModel(task_id=task_id, status=task_status, description=task_description)
     except ValidationError as ve:
         raise HTTPException(status_code=422, detail=f"Invalid input data: {ve}") from ve
     except PyMongoError as pme:

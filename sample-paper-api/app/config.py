@@ -23,8 +23,27 @@ redis_client = aioredis.from_url(
   max_connections=10
 )
 async def get_redis_client():
-  "Initialize redis client"
-  return redis_client
+    "Initialize redis client"
+    return redis_client
+
+safe= [
+  {
+      "category": "HARM_CATEGORY_HARASSMENT",
+      "threshold": "BLOCK_NONE",
+  },
+  {
+      "category": "HARM_CATEGORY_HATE_SPEECH",
+      "threshold": "BLOCK_NONE",
+  },
+  {
+      "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+      "threshold": "BLOCK_NONE",
+  },
+  {
+      "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+      "threshold": "BLOCK_NONE",
+  },
+]
 
 response_schema = {
   "title": "string",
@@ -62,7 +81,7 @@ format or plain text format and extract key entities into a structured format re
 accurate, well-organized, and aligned with the document's content. Ensure that every part of the question paper is parsed appropriately, with
 all relevant fields captured. Try to analyze the number of sections and number of questions in each section and then collect the data. Make sure
 the "response" being returned is in a strict JSON format only with double quotes for required key value pairs.
-An Example of the Schema that needs to be extracted:
+An Example of the Response that needs to be returned referring to Response Schema:
 {
   "title": "HINDUSTANI MUSIC Melodic Instrument",
   "type": "sample_paper",
@@ -218,11 +237,6 @@ Ensure there are no missing commas and brackets, which are causing errors
 in validation like duplicate keys as the bracket are not closed. Specifically, the response should have properly closed objects and arrays.
 """
 
-# prompt = (
-# "Please extract the relevant information from the attached PDF question paper. Remember to
-# extract all the questions with marks specific to each section and return the data strictly in
-# JSON format while replacing the \n and \\n parts."
-# )
 PROMPT = (
     """Please extract the relevant information from the attached PDF question paper, and return the 
     data strictly in valid JSON format.
@@ -270,44 +284,3 @@ class PaperModel(BaseModel):
       chapters: List[str]
       sections: List[SectionModel]"""
 )
-
-# {
-#   "title": "Sample Paper Title",
-#   "type": "previous_year",
-#   "time": 180,
-#   "marks": 100,
-#   "params": {
-#     "board": "CBSE",
-#     "grade": 10,
-#     "subject": "Maths"
-#     },
-#   "tags": ["algebra", "geometry"],
-#   "chapters": ["Quadratic Equations", "Triangles"],
-#   "sections": [
-#     {
-#         "marks_per_question": 5,
-#         "type": "default",
-#         "questions": [
-#           {
-#             "question": "Solve the quadratic equation: x^2 + 5x + 6 = 0",
-#             "answer": "The solutions are x = -2 and x = -3",
-#             "type": "short",
-#             "question_slug": "solve-quadratic-equation",
-#             "reference_id": "QE001",
-#             "hint": "Use the quadratic formula or factorization method",
-#             "params": {}
-#           },
-#           {
-#             "question": "In a right-angled triangle, if one angle is 30°, what is the other acute angle?",
-#             "answer": "60°",
-#             "type": "short",
-#             "question_slug": "right-angle-triangle-angles",
-#             "reference_id": "GT001",
-#             "hint": "Remember that the sum of angles in a triangle is 180°",
-#             "params": {}
-#           }
-#         ]
-#       }
-#     ]
-#   }
-# }
