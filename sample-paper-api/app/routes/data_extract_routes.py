@@ -39,14 +39,37 @@ model = genai.GenerativeModel(
 router = APIRouter()
 
 def update_task_status(task_id, status, description):
-    "Update the status of a background task in the database."
+    """
+    Update the status of a background task in the database.
+
+    This function updates the status and description of a task in the task collection.
+
+    Args:
+        task_id (str): The ID of the task to update.
+        status (str): The new status for the task.
+        description (str): A description providing additional information about the task's status.
+    """
     logger.info(f"Updating task status for task_id: {task_id}, status: {status}")
     query = {"_id":ObjectId(task_id)}
     update_data = {"$set": {"status": status, "description":description}}
     task_collection.update_one(query, update_data)
 
 def generate_sample_paper(sample_pdf, task_id: str):
-    "Generate a sample paper using the Generative AI model."
+    """
+    Generate a sample paper using the Generative AI model.
+
+    This function takes a PDF file and generates a sample paper based on its content.
+
+    Args:
+        sample_pdf (str): The PDF file content to be processed.
+        task_id (str): The ID of the task for logging purposes.
+
+    Returns:
+        str: The generated sample paper content.
+
+    Raises:
+        Exception: If there is an error during content generation.
+    """
     logger.info(f"Generating sample paper for task_id: {task_id}")
     try:
         response = model.generate_content([PROMPT, sample_pdf])
@@ -59,7 +82,20 @@ def generate_sample_paper(sample_pdf, task_id: str):
         update_task_status(task_id, status='Failed', description="Error during Content generation")
 
 def insert_sample_paper(response: dict, task_id: str):
-    "Insert the generated sample paper into the MongoDB collection."
+    """
+    Insert the generated sample paper into the MongoDB collection.
+
+    This function takes the generated paper response and inserts it into the sample papers collection.
+
+    Args:
+        response (dict): The generated sample paper data.
+        task_id (str): The ID of the task for logging purposes.
+
+    Raises:
+        ValidationError: If the generated data does not conform to the PaperModel schema.
+        PyMongoError: If there is an error while inserting the data into MongoDB.
+        Exception: For any other unexpected errors.
+    """
     logger.info(f"Inserting sample paper into the database for task_id: {task_id}")
     try:
         sample_paper = PaperModel(**response)
@@ -76,8 +112,18 @@ def insert_sample_paper(response: dict, task_id: str):
         update_task_status(task_id, status="Failed", description="Internal Server Error")
 
 def pdf_extraction_background_task(file_location: str, task_id:str):
-    """Background task to process PDF extraction and insert the generated 
-    sample paper into the database."""
+    """
+    Background task to process PDF extraction and insert the generated sample paper into the database.
+
+    This function handles the PDF extraction process and generates a sample paper from it.
+
+    Args:
+        file_location (str): The location of the PDF file to process.
+        task_id (str): The ID of the task for logging purposes.
+
+    Raises:
+        Exception: If there are errors during PDF extraction or sample paper insertion.
+    """
     logger.info(f"Starting background task for PDF extraction for task_id: {task_id}")
     try:
         sample_pdf = genai.upload_file(file_location)
@@ -105,7 +151,22 @@ async def extract_pdf(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
     ):
-    "Handle PDF file upload and initiate background task for extraction."
+    """
+    Handle PDF file upload and initiate a background task for extraction.
+
+    This endpoint allows the user to upload a PDF file, which will be processed in the background.
+
+    Args:
+        request (Request): The incoming request object.
+        background_tasks (BackgroundTasks): The background tasks manager to handle long-running tasks.
+        file (UploadFile): The uploaded PDF file.
+
+    Returns:
+        JSONResponse: A response indicating the status of the request.
+
+    Raises:
+        HTTPException: If the file type is invalid or if an error occurs during processing.
+    """
     logger.info(f"Received PDF extraction request: {file.filename}")
     try:
         if file.content_type != "application/pdf":
@@ -136,7 +197,22 @@ async def extract_pdf(
 @router.post('/extract/text')
 @rate_limit(limit=3, time_window=60)
 async def extract_text(request:Request, input_data: str = Body(...)):
-    "Extract and process 'SINGLE LINE' text input to generate a sample paper using the AI model."
+    """
+    Extract and process 'SINGLE LINE' text input to generate a sample paper using the AI model.
+
+    This endpoint takes plain text input and generates a sample paper based on the content. Convert a PDF
+    to plain text and then remove all the newlines and use it as a input.
+
+    Args:
+        request (Request): The incoming request object.
+        input_data (str): The plain text input provided by the user.
+
+    Returns:
+        dict: A response indicating the successful extraction and saving of the sample paper.
+
+    Raises:
+        HTTPException: If the input is invalid or an error occurs during processing.
+    """
     logger.info("Received text extraction request")
     try:
         if not isinstance(input_data, str):
@@ -161,7 +237,20 @@ async def extract_text(request:Request, input_data: str = Body(...)):
 
 @router.get('/tasks/{task_id}', response_model=TaskStatusResponseModel)
 async def task_status(task_id: str):
-    "Retrieve the status of a background task by its ID."
+    """
+    Retrieve the status of a background task by its ID.
+
+    This endpoint checks the status and description of a task identified by the given task ID.
+
+    Args:
+        task_id (str): The ID of the task to check the status for.
+
+    Returns:
+        TaskStatusResponseModel: The status and description of the specified task.
+
+    Raises:
+        HTTPException: If the task ID is invalid or the task does not exist.
+    """
     logger.info(f"Checking task status for task_id: {task_id}")
     try:
         if not ObjectId.is_valid(task_id):

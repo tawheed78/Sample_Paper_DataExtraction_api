@@ -40,7 +40,16 @@ async def create_sample_paper(
     request: Request,
     paper: PaperModel
     ):
-    "Create a new sample paper."
+    """Create a new sample paper.
+    This endpoint receives a request to create a sample paper and stores it in the database.
+
+    Args:
+        request (Request): The incoming request object.
+        paper (PaperModel): The data model representing the sample paper to be created.
+
+    Returns:
+        JSONResponse: A response indicating the creation status and the ID of the newly created paper.
+    """
     logger.info(f"POST /papers - Request received to create sample paper from {request.client.host}")
     try:
         paper_data = paper.model_dump()
@@ -65,7 +74,22 @@ async def get_sample_paper(
     paper_id:str,
     redis: aioredis.Redis = Depends(get_redis_client)
     ):
-    "Retrieve a sample paper."
+    """
+    Retrieves a sample paper.
+
+    This endpoint fetches a sample paper either from the cache or the database.
+
+    Args:
+        request (Request): The incoming request object.
+        paper_id (str): The ID of the sample paper to retrieve.
+        redis : Redis client for caching.
+
+    Returns:
+        PaperModel: The requested sample paper if found.
+
+    Raises:
+        HTTPException: If the paper is not found or there is a database error.
+    """
     logger.info(f"GET /papers/{paper_id} - Request received from {request.client.host}")
     try:
         cached_paper = await redis.get(paper_id)
@@ -100,7 +124,23 @@ async def update_sample_paper(
     update_paper_data: UpddatePaperModel,
     redis: aioredis.Redis = Depends(get_redis_client)
     ):
-    "Update an existing sample paper."
+    """
+    Update an existing sample paper.
+
+    This endpoint updates the details of a sample paper in the database. Partial updates allowed.
+
+    Args:
+        request (Request): The incoming request object.
+        paper_id (str): The ID of the sample paper to update.
+        update_paper_data (UpddatePaperModel): The updated data for the sample paper.
+        redis : Redis client for caching.
+
+    Returns:
+        JSONResponse: A response indicating the update status.
+
+    Raises:
+        HTTPException: If the paper is not found or there is a database error.
+    """
     logger.info(f"PUT /papers/{paper_id} - Request received to update paper from {request.client.host}")
     try:
         query = {"_id": ObjectId(paper_id)}
@@ -139,7 +179,22 @@ async def delete_sample_paper(
     paper_id: str,
     redis: aioredis.Redis = Depends(get_redis_client)
     ):
-    "Delete a sample paper."
+    """
+    Delete a sample paper.
+
+    This endpoint deletes a sample paper from the database.
+
+    Args:
+        request (Request): The incoming request object.
+        paper_id (str): The ID of the sample paper to delete.
+        redis : Redis client for caching.
+
+    Returns:
+        JSONResponse: A response showing the deletion status.
+
+    Raises:
+        HTTPException: If the paper is not found or there is a database error.
+    """
     logger.info(f"DELETE /papers/{paper_id} - Request received from {request.client.host}")
     try:
         query = {'_id': ObjectId(paper_id)}
@@ -163,7 +218,20 @@ async def delete_sample_paper(
         raise HTTPException(status_code=500, detail="Internal Server error") from e
 
 async def search(query_params: dict):
-    "Searches for the required query params in database and returns the list of papers"
+    """
+    Search for sample papers in the database.
+
+    This function queries the database using the provided parameters.
+
+    Args:
+        query_params (dict): The query parameters for searching sample papers.
+
+    Returns:
+        list: A list of sample papers matching the query.
+
+    Raises:
+        HTTPException: If there is a database error.
+    """
     try:
         result_cursor = collection.find(query_params)
         results = await result_cursor.to_list(length=10)
@@ -181,8 +249,21 @@ async def search_papers(
     request: Request,
     query: str = Query(..., description="Query string to search papers")
     ):
-    """Search for sample paper by quering on questions and answer fields.
-    Returns list of papers"""
+    """
+    Search for sample papers by querying on questions and answer fields.
+
+    This endpoint returns a list of paper_id, paper_title, paper_subject of all the papers that match the search criteria.
+
+    Args:
+        request (Request): The incoming request object.
+        query (str): The query string used to search for sample papers.
+
+    Returns:
+        SearchResponseModel: A model containing the search results.
+
+    Raises:
+        HTTPException: If no papers are found or there is an internal error during search.
+    """
     logger.info(f"GET /papers/search/ - Search query '{query}' received from {request.client.host}")
     try:
         query_params = {"$text": {"$search": query }}
