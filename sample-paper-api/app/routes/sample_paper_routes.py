@@ -233,7 +233,8 @@ async def search(query_params: dict):
         HTTPException: If there is a database error.
     """
     try:
-        result_cursor = collection.find(query_params)
+        score = {"score": {"$meta": "textScore"}}
+        result_cursor = collection.find(query_params, score).sort([("score", {"$meta": "textScore"})])
         results = await result_cursor.to_list(length=10)
         return results
     except PyMongoError as e:
