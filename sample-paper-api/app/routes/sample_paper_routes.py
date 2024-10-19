@@ -13,7 +13,7 @@ from pymongo.errors import PyMongoError
 from pydantic import ValidationError
 import redis.asyncio as aioredis
 
-from app.models import PaperModel,UpddatePaperModel, SearchResponseModel, SearchPaperResponseModel
+from app.models import PaperModel,UpdatePaperModel, SearchResponseModel, SearchPaperResponseModel
 #from app.config import db, get_redis_client
 from app.configs.database import db
 from app.configs.redis import get_redis_client
@@ -121,7 +121,7 @@ async def get_sample_paper(
 async def update_sample_paper(
     request:Request,
     paper_id: str,
-    update_paper_data: UpddatePaperModel,
+    update_paper_data: UpdatePaperModel,
     redis: aioredis.Redis = Depends(get_redis_client)
     ):
     """

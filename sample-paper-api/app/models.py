@@ -40,7 +40,7 @@ class PaperModel(BaseModel):
     chapters: List[str]
     sections: List[SectionModel]
 
-class UpddatePaperModel(BaseModel):
+class UpdatePaperModel(BaseModel):
     "Model representing complete PaperModel with its attributes"
     title: Optional[str] = {}
     type: Optional[str] = {}
